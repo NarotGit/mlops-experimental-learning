@@ -1,7 +1,9 @@
 """
 src/pipeline/inference.py
-Loads the saved sklearn pipeline and exposes a predict() function.
+Loads the saved sklearn pipeline/files and exposes a predict() function.
 Used by the FastAPI app and can also be called standalone.
+This module acts as a lightweight bridge rather than heavy train.py.
+app.py imports predict() from inference.py
 """
 
 import os
@@ -34,9 +36,14 @@ def _load():
 
 
 def get_feature_order() -> list:
+    """Returns the ordered list of feature names the model expects."""
     _load()
     return _meta["feature_order"]
 
+def get_model_name() -> str:
+    """Returns the name of the best model (for API responses / logs)."""
+    _load()
+    return _meta["best_model_name"]
 
 def predict(input_data: Dict[str, Any]) -> Tuple[int, float]:
     """
@@ -56,7 +63,7 @@ def predict(input_data: Dict[str, Any]) -> Tuple[int, float]:
 
 
 def predict_batch(records: list) -> list:
-    """Predict on a list of dicts."""
+    """Predict on a batch (list of dicts)."""
     _load()
     feature_order = _meta["feature_order"]
     df = pd.DataFrame(records)[feature_order]
@@ -74,7 +81,7 @@ def predict_batch(records: list) -> list:
 
 
 if __name__ == "__main__":
-    # Quick smoke test
+    # Quick test
     sample = {
         "age": 63, "sex": 1, "cp": 3, "trestbps": 145,
         "chol": 233, "fbs": 1, "restecg": 0, "thalach": 150,
@@ -82,5 +89,11 @@ if __name__ == "__main__":
     }
     pred, conf = predict(sample)
     label = "Heart Disease" if pred == 1 else "No Heart Disease"
+    print(f"Model used   : {get_model_name()}")
     print(f"Prediction : {label} ({pred})")
     print(f"Confidence : {conf:.4f}")
+
+    # Batch test
+    batch_results = predict_batch([sample, sample])
+    print(f"\nBatch test   : {len(batch_results)} results returned")
+    print(f"Result[0]    : {batch_results[0]}")

@@ -3,14 +3,14 @@ src/pipeline/train.py
 Trains Logistic Regression and Random Forest classifiers on the Heart Disease
 UCI dataset, tracks all experiments with MLflow, and saves the best model.
 
-Run from project root:
-    python src/pipeline/train.py
+Run command: python src/pipeline/train.py
 """
 
 import os
 import sys
 import json
 import joblib
+import tempfile
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -34,26 +34,22 @@ from sklearn.metrics import (
 import mlflow
 import mlflow.sklearn
 
-# ---------------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------------
+# Paths configured
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_PATH = os.path.join(PROJECT_ROOT, "data", "heart.csv")
 MODEL_DIR = os.path.join(PROJECT_ROOT, "models")
+PLOTS_DIR    = os.path.join(PROJECT_ROOT, "screenshots")
 os.makedirs(MODEL_DIR, exist_ok=True)
+os.makedirs(PLOTS_DIR,  exist_ok=True)
 
-# ---------------------------------------------------------------------------
 # Feature definitions
-# ---------------------------------------------------------------------------
 CATEGORICAL_FEATURES = ["sex", "cp", "fbs", "restecg", "exang", "slope", "ca", "thal"]
 NUMERICAL_FEATURES = ["age", "trestbps", "chol", "thalach", "oldpeak"]
 TARGET = "target"
 
-
-# ---------------------------------------------------------------------------
 # Data loading
-# ---------------------------------------------------------------------------
 def load_data(path: str) -> pd.DataFrame:
+    """this function loads the dataset"""
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"Dataset not found at {path}.\n"
@@ -63,11 +59,10 @@ def load_data(path: str) -> pd.DataFrame:
     print(f"Loaded dataset: {df.shape[0]} rows, {df.shape[1]} columns")
     return df
 
-
-# ---------------------------------------------------------------------------
 # Preprocessing pipeline builder
-# ---------------------------------------------------------------------------
 def build_preprocessor() -> ColumnTransformer:
+    """this function helps in feature processing like missing value imputaion,
+    feature enconding"""
     numerical_pipeline = Pipeline([
         ("imputer", SimpleImputer(strategy="median")),
         ("scaler", StandardScaler()),
@@ -83,39 +78,38 @@ def build_preprocessor() -> ColumnTransformer:
     return preprocessor
 
 
-# ---------------------------------------------------------------------------
 # Plotting helpers (saved as artifacts)
-# ---------------------------------------------------------------------------
+"""this functions help us to plot confusion matrix and roc curve"""
 def plot_confusion_matrix(cm, labels, title, save_path):
     fig, ax = plt.subplots(figsize=(6, 5))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=labels,
-                yticklabels=labels, ax=ax)
-    ax.set_xlabel("Predicted")
-    ax.set_ylabel("Actual")
-    ax.set_title(title)
+    sns.heatmap(
+        cm, annot=True, fmt="d", cmap="Blues",
+        xticklabels=labels, yticklabels=labels, ax=ax,
+        linewidths=0.5, linecolor="white",
+    )
+    ax.set_xlabel("Predicted Label", fontweight="bold")
+    ax.set_ylabel("True Label",      fontweight="bold")
+    ax.set_title(title, fontsize=13, fontweight="bold", pad=12)
     plt.tight_layout()
-    fig.savefig(save_path, dpi=120)
+    fig.savefig(save_path, dpi=120, bbox_inches="tight")
     plt.close(fig)
-    return save_path
 
 
 def plot_roc_curve(fpr, tpr, auc_score, title, save_path):
     fig, ax = plt.subplots(figsize=(6, 5))
-    ax.plot(fpr, tpr, lw=2, label=f"AUC = {auc_score:.3f}")
-    ax.plot([0, 1], [0, 1], "k--", lw=1)
-    ax.set_xlabel("False Positive Rate")
-    ax.set_ylabel("True Positive Rate")
-    ax.set_title(title)
+    ax.plot(fpr, tpr, lw=2, color="#e74c3c", label=f"ROC (AUC = {auc_score:.3f})")
+    ax.plot([0, 1], [0, 1], "k--", lw=1, label="Random classifier")
+    ax.fill_between(fpr, tpr, alpha=0.1, color="#e74c3c")
+    ax.set_xlabel("False Positive Rate", fontweight="bold")
+    ax.set_ylabel("True Positive Rate",  fontweight="bold")
+    ax.set_title(title, fontsize=13, fontweight="bold", pad=12)
     ax.legend(loc="lower right")
     plt.tight_layout()
-    fig.savefig(save_path, dpi=120)
+    fig.savefig(save_path, dpi=120, bbox_inches="tight")
     plt.close(fig)
-    return save_path
 
 
-# ---------------------------------------------------------------------------
-# Train + evaluate one model (one MLflow run)
-# ---------------------------------------------------------------------------
+# Trains and evaluate one model (one MLflow run)
 def train_and_log(
     model_name: str,
     classifier,
@@ -123,18 +117,21 @@ def train_and_log(
     X_train, X_test, y_train, y_test,
     experiment_name: str,
 ):
+    """this flow runs full pipeline and mode training/tuning, evaluation
+    and logs all the details to MLflow.
+    Returns (best_pipeline, metrics_dict, mlflow_run_id)"""
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(run_name=model_name):
 
-        # -- Build full pipeline --
+        # Builds full pipeline
         preprocessor = build_preprocessor()
         full_pipeline = Pipeline([
             ("preprocessor", preprocessor),
             ("classifier", classifier),
         ])
 
-        # -- Hyperparameter tuning --
+        # Hyperparameter tuning 
         print(f"\n[{model_name}] Running GridSearchCV...")
         grid_search = GridSearchCV(
             full_pipeline, param_grid,
@@ -144,16 +141,16 @@ def train_and_log(
         best_pipeline = grid_search.best_estimator_
         best_params = grid_search.best_params_
 
-        # -- Log params --
+        # Log model params 
         mlflow.log_params({k: str(v) for k, v in best_params.items()})
         mlflow.log_param("model_name", model_name)
 
-        # -- Cross-val on training set --
+        # Performing cross-validation on train set
         cv_auc = cross_val_score(best_pipeline, X_train, y_train, cv=5, scoring="roc_auc")
         mlflow.log_metric("cv_roc_auc_mean", float(cv_auc.mean()))
         mlflow.log_metric("cv_roc_auc_std", float(cv_auc.std()))
 
-        # -- Test set evaluation --
+        # Test set evaluation 
         y_pred = best_pipeline.predict(X_test)
         y_prob = best_pipeline.predict_proba(X_test)[:, 1]
 
@@ -170,21 +167,34 @@ def train_and_log(
         print(f"[{model_name}] Test metrics: {metrics}")
         print(classification_report(y_test, y_pred, target_names=["No Disease", "Disease"]))
 
-        # -- Confusion matrix plot --
+        # Confusion matrix plot
         cm = confusion_matrix(y_test, y_pred)
-        cm_path = f"/tmp/cm_{model_name.replace(' ', '_')}.png"
+        # Use a temp dir that works on both Windows and Linux
+        tmp_dir  = tempfile.gettempdir()
+        cm_path  = os.path.join(tmp_dir, f"cm_{model_name.replace(' ', '_')}.png")
+        cm_dest  = os.path.join(PLOTS_DIR, f"cm_{model_name.replace(' ', '_')}.png")
         plot_confusion_matrix(cm, ["No Disease", "Disease"],
                               f"Confusion Matrix – {model_name}", cm_path)
+        # Also copy to screenshots/ for the report
+        import shutil
+        shutil.copy(cm_path, cm_dest)
         mlflow.log_artifact(cm_path, artifact_path="plots")
+        print(f"Confusion matrix → {cm_dest}")
 
-        # -- ROC curve plot --
+        # ROC curve plot
         fpr, tpr, _ = roc_curve(y_test, y_prob)
-        roc_path = f"/tmp/roc_{model_name.replace(' ', '_')}.png"
+        roc_path    = os.path.join(tmp_dir, f"roc_{model_name.replace(' ', '_')}.png")
+        roc_dest    = os.path.join(PLOTS_DIR, f"roc_{model_name.replace(' ', '_')}.png")
         plot_roc_curve(fpr, tpr, metrics["test_roc_auc"],
                        f"ROC Curve – {model_name}", roc_path)
+        
+        shutil.copy(roc_path, roc_dest)
         mlflow.log_artifact(roc_path, artifact_path="plots")
+        print(f"  ROC curve      → {roc_dest}")
 
-        # -- Log sklearn model --
+        # Log sklearn model 
+        # This saves the model in MLflow's format inside mlruns/
+        # You can load it later with: mlflow.sklearn.load_model("runs:/<run_id>/model")
         mlflow.sklearn.log_model(best_pipeline, artifact_path="model")
 
         run_id = mlflow.active_run().info.run_id
@@ -193,11 +203,12 @@ def train_and_log(
     return best_pipeline, metrics, run_id
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+# Main function
 def main():
-    # ---- Load data ----
+    print("=" * 40)
+    print(" HEART DISEASE MLOps — Model Training")
+    print("=" * 40)
+    # Load data
     df = load_data(DATA_PATH)
     X = df[NUMERICAL_FEATURES + CATEGORICAL_FEATURES]
     y = df[TARGET]
@@ -209,7 +220,7 @@ def main():
 
     experiment_name = "heart_disease_classification"
 
-    # ---- Model 1: Logistic Regression ----
+    # Model 1: Logistic Regression
     lr_param_grid = {
         "classifier__C": [0.01, 0.1, 1.0, 10.0],
         "classifier__solver": ["lbfgs"],
@@ -224,7 +235,7 @@ def main():
         experiment_name=experiment_name,
     )
 
-    # ---- Model 2: Random Forest ----
+    # Model 2: Random Forest
     rf_param_grid = {
         "classifier__n_estimators": [100, 200],
         "classifier__max_depth": [None, 5, 10],
@@ -239,19 +250,19 @@ def main():
         experiment_name=experiment_name,
     )
 
-    # ---- Pick best model by ROC-AUC ----
+    # Picks best model by ROC-AUC
     if rf_metrics["test_roc_auc"] >= lr_metrics["test_roc_auc"]:
         best_pipeline, best_name = rf_pipeline, "Random Forest"
     else:
         best_pipeline, best_name = lr_pipeline, "Logistic Regression"
 
-    # ---- Save best model to disk ----
+    # Saves best model
     model_path = os.path.join(MODEL_DIR, "best_model.joblib")
     joblib.dump(best_pipeline, model_path)
     print(f"\nBest model: {best_name}")
     print(f"Model saved to {model_path}")
 
-    # ---- Save metadata for API to read ----
+    # Save metadata json for API to read (so API becomes independent from train.py)
     meta = {
         "best_model_name": best_name,
         "numerical_features": NUMERICAL_FEATURES,
@@ -263,7 +274,7 @@ def main():
         json.dump(meta, f, indent=2)
     print(f"Model metadata saved to {meta_path}")
 
-    # ---- Comparison summary ----
+    # Model comparison summary
     print("\n=== Model Comparison ===")
     print(f"{'Metric':<20} {'Logistic Reg':>15} {'Random Forest':>15}")
     print("-" * 52)

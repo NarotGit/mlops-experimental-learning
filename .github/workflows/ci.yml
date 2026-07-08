@@ -1,0 +1,171 @@
+name: Heart Disease MLOps CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Job 1: Lint ────────────────────────────────────────────────────────
+  lint:
+    name: Code Quality (flake8)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install flake8
+        run: pip install flake8==7.0.0
+
+      - name: Run flake8
+        run: flake8 src/ tests/ --config=.flake8
+
+  # ── Job 2: Test ────────────────────────────────────────────────────────
+  test:
+    name: Unit & API Tests (pytest)
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download dataset
+        run: python data/download_data.py
+
+      - name: Train model (generates models/best_model.joblib)
+        run: python src/pipeline/train.py
+
+      - name: Run pytest with coverage
+        run: |
+          pytest tests/ -v \
+            --cov=src \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --junitxml=test-results.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results.xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  # ── Job 3: Docker Build Validation ────────────────────────────────────
+  docker-build:
+    name: Docker Build & Smoke Test
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies & train model
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          python data/download_data.py
+          python src/pipeline/train.py
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker build -t heart-disease-api:ci .
+
+      - name: Run container and smoke test
+        run: |
+          docker run -d \
+            --name api-test \
+            -p 8000:8000 \
+            heart-disease-api:ci
+
+          # Wait for API to be ready
+          echo "Waiting for API to start..."
+          for i in {1..15}; do
+            if curl -sf http://localhost:8000/health; then
+              echo "API is up!"
+              break
+            fi
+            sleep 3
+          done
+
+          # Test /health endpoint
+          echo "Testing /health..."
+          curl -sf http://localhost:8000/health | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          assert data['status'] == 'healthy', f'Expected healthy, got {data}'
+          assert data['model_loaded'] == True, 'Model not loaded'
+          print('Health check passed:', data)
+          "
+
+          # Test /predict endpoint
+          echo "Testing /predict..."
+          curl -sf -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" \
+            -d '{
+              "age": 63, "sex": 1, "cp": 3, "trestbps": 145,
+              "chol": 233, "fbs": 1, "restecg": 0, "thalach": 150,
+              "exang": 0, "oldpeak": 2.3, "slope": 0, "ca": 0, "thal": 1
+            }' | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          assert 'prediction' in data, 'Missing prediction field'
+          assert 'confidence' in data, 'Missing confidence field'
+          assert data['prediction'] in [0, 1], f'Invalid prediction: {data[\"prediction\"]}'
+          assert 0 <= data['confidence'] <= 1, f'Invalid confidence: {data[\"confidence\"]}'
+          print('Predict smoke test passed:', data)
+          "
+
+      - name: Show container logs
+        if: always()
+        run: docker logs api-test
+
+      - name: Cleanup container
+        if: always()
+        run: docker rm -f api-test || true

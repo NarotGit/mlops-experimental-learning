@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+mlops/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ML artefacts — keep models/ tracked but exclude large binaries optionally
+models/*.joblib
+models/*.pkl
+models/*.onnx
+# Keep model_meta.json tracked
+!models/model_meta.json
+
+# MLflow — local tracking store (can be large)
+mlruns/
+
+# Data — raw CSV kept locally, not pushed to GitHub
+data/heart.csv
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+coverage.xml
+
+# Docker
+*.tar
+
+# Logs
+*.log
+logs/
+
+# Reports / screenshots (committed manually)
+# reports/
+# screenshots/
