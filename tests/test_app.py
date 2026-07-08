@@ -39,11 +39,10 @@ DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "heart.csv")
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "best_model.joblib")
 
 
-# =========================================================================
-# 1. Data tests
-# =========================================================================
-
+# Data tests
 class TestData:
+    """does heart.csv exist? right columns? binary target?
+        (catches id data is broken early)"""
     def test_dataset_file_exists(self):
         assert os.path.exists(DATA_PATH), (
             f"Dataset not found at {DATA_PATH}. Run: python data/download_data.py"
@@ -79,11 +78,11 @@ class TestData:
             assert df[col].notna().any(), f"Column {col} is entirely null"
 
 
-# =========================================================================
-# 2. Preprocessing pipeline tests
-# =========================================================================
-
+# Preprocessing pipeline tests
 class TestPreprocessor:
+    """checks does ColumnTransformer work?
+       no NaNs after imputation? right output shape?
+      (catches pipeline config bugs)"""
     def test_build_preprocessor(self):
         from src.pipeline.train import build_preprocessor
         preprocessor = build_preprocessor()
@@ -104,11 +103,11 @@ class TestPreprocessor:
         assert not np.any(np.isnan(X_transformed)), "NaN values found after preprocessing"
 
 
-# =========================================================================
-# 3. Model / inference tests
-# =========================================================================
-
+# Model and inference tests
 class TestModel:
+    """does predict() return int + float?
+       is prediction 0 or 1? confidence in [0,1]?
+       (catches model file corruption or inference bugs)"""
     def test_model_file_exists(self):
         assert os.path.exists(MODEL_PATH), (
             f"Model not found at {MODEL_PATH}. Run: python src/pipeline/train.py"
@@ -152,10 +151,7 @@ class TestModel:
         assert len(order) == 13, f"Expected 13 features, got {len(order)}"
 
 
-# =========================================================================
-# 4. API tests (TestClient — no server needed)
-# =========================================================================
-
+# API tests (TestClient — no server needed)
 @pytest.fixture(scope="module")
 def client():
     from src.api.app import app
@@ -163,6 +159,10 @@ def client():
 
 
 class TestAPI:
+    """does /predict return 200?
+    does /health say "healthy"?
+    does bad input get rejected with 422?
+    (catches any API contract bugs before dockerization)"""
     def test_root_returns_200(self, client):
         response = client.get("/")
         assert response.status_code == 200

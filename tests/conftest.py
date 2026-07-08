@@ -1,6 +1,5 @@
 """
 tests/conftest.py
-Shared pytest fixtures and path setup.
 """
 import os
 import sys

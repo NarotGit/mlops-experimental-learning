@@ -1,13 +1,9 @@
 """
 src/api/app.py
 FastAPI application exposing /predict, /health and Prometheus /metrics endpoints.
-
-Run locally:
-    uvicorn src.api.app:app --host 0.0.0.0 --port 8000 --reload
-
+Command to run locally: uvicorn src.api.app:app --host 0.0.0.0 --port 8000 --reload
 Swagger UI available at:  http://localhost:8000/docs
 """
-
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -18,7 +14,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from prometheus_fastapi_instrumentator import Instrumentator
 
-# ---- Logging setup ----
+# Logging level setup 
 logging.basicConfig(
     level=logging.INFO,
     format='{"time": "%(asctime)s", "level": "%(levelname)s", "message": "%(message)s"}',
@@ -26,14 +22,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ---- Import inference module ----
+# Imports inference module 
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from src.pipeline.inference import predict, predict_batch, get_feature_order
 
 
-# ---- Lifespan (startup / shutdown) ----
+# Lifespan (startup / shutdown) 
+"""Lifespan block runs at server startup before any request is accepted. 
+It calls get_feature_order() which triggers _load() in inference.py — this loads best_model.joblib 
+into memory once. Every /predict call after this is fast because the model is already in RAM."""
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Heart Disease Prediction API")
@@ -47,11 +46,11 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Heart Disease Prediction API")
 
 
-# ---- App definition ----
+# App definition
 app = FastAPI(
     title="Heart Disease Prediction API",
     description=(
-        "MLOps Assignment 01 — AIMLCZG523\n\n"
+        "MLOps Experimental Learning\n\n"
         "Predicts the presence of heart disease from patient health data "
         "using a trained sklearn Pipeline."
     ),
@@ -59,11 +58,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ---- Prometheus metrics (adds /metrics endpoint automatically) ----
+# Prometheus metrics (adds /metrics endpoint automatically) 
 Instrumentator().instrument(app).expose(app)
 
-
-# ---- Request / Response schemas ----
+# Request schema for our input data
 class PredictRequest(BaseModel):
     age: float = Field(..., ge=1, le=120, description="Age in years")
     sex: int = Field(..., ge=0, le=1, description="Sex (1=male, 0=female)")
@@ -91,7 +89,7 @@ class PredictRequest(BaseModel):
         }
     }
 
-
+# Response schema for output data
 class PredictResponse(BaseModel):
     prediction: int = Field(..., description="0 = No heart disease, 1 = Heart disease")
     label: str = Field(..., description="Human-readable prediction label")
@@ -106,7 +104,7 @@ class HealthResponse(BaseModel):
     version: str
 
 
-# ---- Middleware: log every request ----
+# Middleware: wraps every single request and logs
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.time()
@@ -119,7 +117,7 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-# ---- Endpoints ----
+# API Endpoints
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 def health_check():
     """Liveness / readiness probe for Kubernetes."""
@@ -138,8 +136,7 @@ def health_check():
 @app.post("/predict", response_model=PredictResponse, tags=["Prediction"])
 def predict_endpoint(request: PredictRequest):
     """
-    Predict heart disease risk from patient health features.
-
+    Predict heart disease risk from patient health input features.
     Returns prediction (0/1), human-readable label, and probability scores.
     """
     try:
