@@ -1,0 +1,55 @@
+# Python virtual environment — Docker dont need venv it installs its own from requirements.txt
+venv/
+.venv/
+env/
+mlops/
+
+# Python cache files — not needed waste of space
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+
+# Jupyter notebooks — not needed in production container
+notebooks/
+.ipynb_checkpoints/
+
+# MLflow tracking data — not needed for serving predictions
+mlruns/
+
+# Raw dataset — model is already trained, we don't need the CSV
+data/
+
+# Git history
+.git/
+.gitignore
+.gitattributes
+
+# Test files — we don't run tests inside the production container
+tests/
+pytest.ini
+.flake8
+
+# IDE config
+.vscode/
+.idea/
+
+# Screenshots and reports
+screenshots/
+reports/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Docker files themselves (no need to copy into the image)
+docker-compose.yml
+
+# What DOES gets copied (not listed here):
+#   src/            → FastAPI app + inference code
+#   models/         → best_model.joblib + model_meta.json
+#   requirements.txt → to install dependencies inside image

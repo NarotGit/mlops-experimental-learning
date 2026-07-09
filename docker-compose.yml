@@ -1,0 +1,83 @@
+networks:
+  # Shared network so containers can reach each other by service name
+  # e.g. Prometheus uses "api:8000" not "localhost:8000"
+  mlops-net:
+    driver: bridge
+
+volumes:
+  prometheus_data:   # Persists Prometheus metrics across container restarts
+  grafana_data:      # Persists Grafana dashboards and settings
+
+services:
+  # FastAPI prediction service ──────────────────────────────────────
+  api:
+    build:
+      context: .           # Use current directory as build context
+      dockerfile: Dockerfile
+    image: heart-disease-api:latest
+    container_name: heart-disease-api
+    ports:
+      - "8000:8000"        # Maps host port 8000 to container port 8000
+    volumes:
+      # Mount models/ directory from host into container
+      # Why: if you retrain (python src/pipeline/train.py) you only need
+      # to restart this container, not rebuild the entire image
+      # :ro = read-only, the API should never write back to models/
+      - ./models:/app/models:ro
+    environment:
+      - ENV=production
+      - PYTHONUNBUFFERED=1
+    networks:
+      - mlops-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Prometheus ─────────────────────────────────────────────────
+  # Takes /metrics from the API every 15 seconds and stores the data
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      # Our prometheus.yml tells it WHERE to scrape (the API service)
+      - ./src/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    networks:
+      - mlops-net
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  # Grafana for monitoring ─────────────────────────────────────────────────
+  # Connects to Prometheus and displays metrics as visual dashboards
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      # Provisioning auto-configures Prometheus datasource on first start
+      # Without this you'd manually add the datasource every time
+      - ./src/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+    networks:
+      - mlops-net
+    restart: unless-stopped
+    depends_on:
+      - prometheus
