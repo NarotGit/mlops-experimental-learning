@@ -5,14 +5,12 @@ metadata:
   labels:
     app: heart-disease-api
 spec:
-  # NodePort: accessible via minikube ip + nodePort
-  # Use: minikube service heart-disease-api-service --url
   type: NodePort
   selector:
     app: heart-disease-api
   ports:
     - protocol: TCP
-      port: 80           # Service port (internal cluster)
-      targetPort: 8000   # Container port
-      nodePort: 30080    # External port on Minikube node (30000-32767)
+      port: 80
+      targetPort: 8000
+      nodePort: 30080
       name: http

@@ -4,7 +4,6 @@ metadata:
   name: heart-disease-api
   labels:
     app: heart-disease-api
-    version: "1.0.0"
 spec:
   replicas: 2
   selector:
@@ -15,7 +14,6 @@ spec:
       labels:
         app: heart-disease-api
       annotations:
-        # Tells Prometheus to scrape this pod
         prometheus.io/scrape: "true"
         prometheus.io/port: "8000"
         prometheus.io/path: "/metrics"
@@ -23,11 +21,9 @@ spec:
       containers:
         - name: api
           image: heart-disease-api:latest
-          # For Minikube: use locally built image
           imagePullPolicy: Never
           ports:
             - containerPort: 8000
-              name: http
           resources:
             requests:
               memory: "256Mi"
@@ -41,14 +37,12 @@ spec:
               port: 8000
             initialDelaySeconds: 20
             periodSeconds: 30
-            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health
               port: 8000
             initialDelaySeconds: 15
             periodSeconds: 10
-            failureThreshold: 3
           env:
             - name: ENV
               value: "production"
