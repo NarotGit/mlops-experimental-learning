@@ -81,7 +81,7 @@ def predict_batch(records: list) -> list:
 
 
 if __name__ == "__main__":
-    # Quick test
+    # sample test
     sample = {
         "age": 63, "sex": 1, "cp": 3, "trestbps": 145,
         "chol": 233, "fbs": 1, "restecg": 0, "thalach": 150,

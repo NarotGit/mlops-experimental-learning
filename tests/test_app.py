@@ -19,9 +19,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-# =========================================================================
-# Fixtures
-# =========================================================================
+# sample input configs
 
 SAMPLE_INPUT = {
     "age": 63, "sex": 1, "cp": 3, "trestbps": 145,
@@ -39,7 +37,7 @@ DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "heart.csv")
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "best_model.joblib")
 
 
-# Data tests
+# TestData tests about dataset, presence of required columns,target,nulls etc.
 class TestData:
     """does heart.csv exist? right columns? binary target?
         (catches id data is broken early)"""
@@ -78,7 +76,7 @@ class TestData:
             assert df[col].notna().any(), f"Column {col} is entirely null"
 
 
-# Preprocessing pipeline tests
+# TestPreprocessor loads preprocessor and does pipeline tests
 class TestPreprocessor:
     """checks does ColumnTransformer work?
        no NaNs after imputation? right output shape?
@@ -103,7 +101,7 @@ class TestPreprocessor:
         assert not np.any(np.isnan(X_transformed)), "NaN values found after preprocessing"
 
 
-# Model and inference tests
+# TestModel tests for model prescense and inference tests
 class TestModel:
     """does predict() return int + float?
        is prediction 0 or 1? confidence in [0,1]?

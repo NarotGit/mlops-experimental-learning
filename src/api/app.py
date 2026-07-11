@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from src.pipeline.inference import predict, predict_batch, get_feature_order
 
 
-# Lifespan (startup / shutdown) 
+# Lifespan (startup and shutdown of service) 
 """Lifespan block runs at server startup before any request is accepted. 
 It calls get_feature_order() which triggers _load() in inference.py — this loads best_model.joblib 
 into memory once. Every /predict call after this is fast because the model is already in RAM."""
