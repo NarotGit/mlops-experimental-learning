@@ -195,7 +195,7 @@ def train_and_log(
         # Log sklearn model 
         # This saves the model in MLflow's format inside mlruns/
         # You can load it later with: mlflow.sklearn.load_model("runs:/<run_id>/model")
-        mlflow.sklearn.log_model(best_pipeline, artifact_path="model",skops_trusted_types=["numpy.dtype"])
+        mlflow.sklearn.log_model(best_pipeline, artifact_path="model",skops_trusted_types=["numpy.dtype"],)
 
         run_id = mlflow.active_run().info.run_id
         print(f"[{model_name}] MLflow run_id: {run_id}")
