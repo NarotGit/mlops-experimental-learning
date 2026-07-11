@@ -109,7 +109,7 @@ def plot_roc_curve(fpr, tpr, auc_score, title, save_path):
     plt.close(fig)
 
 
-# Trains and evaluate one model (one MLflow run)
+# Trains and evaluate one model (one mlflow run at atime)
 def train_and_log(
     model_name: str,
     classifier,
@@ -195,7 +195,7 @@ def train_and_log(
         # Log sklearn model 
         # This saves the model in MLflow's format inside mlruns/
         # You can load it later with: mlflow.sklearn.load_model("runs:/<run_id>/model")
-        mlflow.sklearn.log_model(best_pipeline, artifact_path="model")
+        mlflow.sklearn.log_model(best_pipeline, artifact_path="model",skops_trusted_types=["numpy.dtype"])
 
         run_id = mlflow.active_run().info.run_id
         print(f"[{model_name}] MLflow run_id: {run_id}")
