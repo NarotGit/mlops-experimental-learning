@@ -1,4 +1,4 @@
 # MLOps Experimental Learning Assignment 1
-* **Name:** Your Full Name
+* **Name:** Sathigari Narotham Reddy
 * **Student ID:** 2024ac05074
-* **Email:** your_student_id@pilani.bits-pilani.ac.in
+* **Email:** 2024ac05074@wilp.bits-pilani.ac.in
